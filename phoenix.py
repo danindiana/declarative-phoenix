@@ -104,7 +104,7 @@ def check_docker_drift(
         name = d["name"]
         if name not in live_map:
             drift.append(
-                {"container": name, "field": "image", "desired": d["image"], "actual": None}
+                {"type": "docker", "container": name, "field": "image", "desired": d["image"], "actual": None}
             )
             continue
 
@@ -113,6 +113,7 @@ def check_docker_drift(
         if d["image"] != l["image"]:
             drift.append(
                 {
+                    "type": "docker",
                     "container": name,
                     "field": "image",
                     "desired": d["image"],
@@ -125,6 +126,7 @@ def check_docker_drift(
             if actual_host != str(manifest_host):
                 drift.append(
                     {
+                        "type": "docker",
                         "container": name,
                         "field": "ports",
                         "desired": {manifest_port: manifest_host},
@@ -251,6 +253,30 @@ def cmd_status(manifest: dict) -> None:
     print(f"{GREEN}{ok} ok{RESET}  {RED}{drift} drift  {missing} missing{RESET}")
 
 
+def apply_docker_change(c: dict, dry_run: bool) -> None:
+    prefix = "[dry-run] " if dry_run else ""
+    if c["field"] == "image":
+        for cmd in [["docker", "pull", c["desired"]],
+                    ["docker", "restart", c["container"]]]:
+            print(f"{prefix}{' '.join(cmd)}")
+            if not dry_run:
+                subprocess.run(cmd, check=False)
+    elif c["field"] == "ports":
+        port_args = " ".join(f"-p {k}:{v}" for k, v in c["desired"].items())
+        # look up image from manifest is not available here — user must recreate
+        print(f"{prefix}WARNING: port changes require container recreation.")
+        print(f"{prefix}  docker stop {c['container']} && docker rm {c['container']}")
+        print(f"{prefix}  docker run -d --name {c['container']} {port_args} <image>")
+
+
+def apply_ufw_change(c: dict, dry_run: bool) -> None:
+    action = "allow" if c["desired"] == "present" else "deny"
+    cmd = ["sudo", "ufw", action, f"{c['port']}/{c['protocol']}"]
+    print(f"{'[dry-run] ' if dry_run else ''}{' '.join(cmd)}")
+    if not dry_run:
+        subprocess.run(cmd, check=False)
+
+
 def cmd_apply(manifest: dict, dry_run: bool = False) -> None:
     live_systemd = {
         svc["name"]: get_live_systemd_state(svc["name"])
@@ -270,6 +296,10 @@ def cmd_apply(manifest: dict, dry_run: bool = False) -> None:
             print(f"{'[dry-run] ' if dry_run else ''}systemctl {action} {c['name']}")
             if not dry_run:
                 subprocess.run(cmd, check=False)
+        elif c.get("type") == "docker":
+            apply_docker_change(c, dry_run)
+        elif c.get("type") == "ufw":
+            apply_ufw_change(c, dry_run)
         else:
             print(f"{'[dry-run] ' if dry_run else ''}manual action needed: {c}")
 
