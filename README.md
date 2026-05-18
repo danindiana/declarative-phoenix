@@ -23,11 +23,21 @@ pip install pyyaml
 ## Usage
 
 ```bash
-python phoenix.py <manifest.yaml> status     # show full state table
-python phoenix.py <manifest.yaml> diff       # show only drifted items
-python phoenix.py <manifest.yaml> apply      # reconcile live state to manifest
+python phoenix.py <manifest.yaml> status       # show full state table
+python phoenix.py <manifest.yaml> diff         # show only drifted items
+python phoenix.py <manifest.yaml> apply        # reconcile live state to manifest
 python phoenix.py <manifest.yaml> apply --dry-run
 ```
+
+## What `apply` does
+
+| Type | Drift | Action |
+|---|---|---|
+| systemd | not running | `systemctl start <name>` |
+| systemd | not enabled | `systemctl enable <name>` |
+| docker | wrong image | `docker pull <image>` + `docker restart <name>` |
+| docker | wrong ports | prints recreation command (port changes require `docker rm`) |
+| ufw | rule missing | `sudo ufw allow/deny <port>/<proto>` |
 
 ## Manifest schema
 
@@ -71,9 +81,10 @@ Handles all common `ufw status numbered` formats:
 
 ## Origin
 
-Designed across three local Ollama model sessions:
+Built across four local Ollama model sessions:
 - `deepseek-r1:14b` — YAML schema and class scaffold
-- `granite4.1:8b` — UFW parser and docker drift detector
+- `granite4.1:8b` — UFW parser and docker drift detector (stub implementations)
 - `devstral:24b` — `cmd_status` implementation
+- `gemma4:31b-it-q4_K_M` — `apply_docker_change` and `apply_ufw_change`
 
 Bugs fixed and assembled by [Claude Code](https://claude.ai/code).
