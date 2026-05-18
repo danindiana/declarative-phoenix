@@ -1,0 +1,43 @@
+# worlock declarative manifest
+# Usage: python phoenix.py worlock.yaml [status|diff|apply [--dry-run]]
+
+systemd:
+  - name: nginx
+    state: running
+
+  - name: piavpn
+    state: running
+
+  - name: ollama
+    state: running
+
+  - name: backup-timer
+    state: enabled
+
+docker:
+  - name: open-webui
+    image: ghcr.io/open-webui/open-webui:main
+    ports:
+      "3000": "3000"
+
+ufw:
+  - port: 22222
+    protocol: tcp
+    action: ALLOW
+    from_ip: 192.168.1.0/24
+
+  - port: 3000
+    protocol: tcp
+    action: ALLOW
+    from_ip: 192.168.1.0/24
+
+  - port: 19999
+    protocol: tcp
+    action: ALLOW
+    from_ip: 192.168.1.0/24
+
+env_vars:
+  - name: OLLAMA_HOST
+    value: "127.0.0.1"
+  - name: CUDA_VISIBLE_DEVICES
+    value: "0,1"
